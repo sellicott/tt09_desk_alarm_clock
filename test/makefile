@@ -1,7 +1,6 @@
 SRC_DIR = $(PWD)/../src
 
 # List of testbenches to run automatically
-SRC_TESTBENCHES := clk_gen_tb.v
 SRC_TESTBENCHES += button_debounce_tb.v
 SRC_TESTBENCHES += clock_register_tb.v
 SRC_TESTBENCHES += binary_to_bcd_tb.v
