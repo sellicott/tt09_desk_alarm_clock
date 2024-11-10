@@ -26,6 +26,7 @@ module clock_wrapper (
   i_fast_set,     // select the timeset speed (1 for fast, 0 for slow)
   i_set_hours,    // stop updating time (from refclk) and set hours
   i_set_minutes,  // stop updating time (from refclk) and set minutes
+  i_12h_mode,
 
   // Clock SPI Output to MAX7219
   o_serial_load,  // SPI _CS_ pin
@@ -42,6 +43,7 @@ module clock_wrapper (
   input wire i_fast_set;
   input wire i_set_hours;
   input wire i_set_minutes;
+  input wire i_12h_mode;
   
   output wire o_serial_load;
   output wire o_serial_dout;
@@ -77,6 +79,7 @@ module clock_wrapper (
   wire clk_fast_set;
   wire clk_set_hours;
   wire clk_set_minutes;
+  wire clk_12h_mode;
 
   button_debounce input_debounce (
     .i_reset_n (i_reset_n),
@@ -87,10 +90,12 @@ module clock_wrapper (
     .i_fast_set    (i_fast_set),
     .i_set_hours   (i_set_hours),
     .i_set_minutes (i_set_minutes),
+    .i_12h_mode    (i_12h_mode),
     
     .o_fast_set_db    (clk_fast_set),
     .o_set_hours_db   (clk_set_hours),
-    .o_set_minutes_db (clk_set_minutes)
+    .o_set_minutes_db (clk_set_minutes),
+    .o_12h_mode_db    (clk_12h_mode)
   );
 
   // Modules for holding the time
@@ -124,6 +129,25 @@ module clock_wrapper (
     .o_seconds (clk_seconds)
   );
 
+  wire [4:0] clk_hours_12h;
+  wire [5:0] clk_minutes_12h;
+  wire [5:0] clk_seconds_12h;
+  wire clk_am_pm;
+  
+
+  clock_mode_converter mode_conv_inst (
+    .i_12h_mode (clk_12h_mode),
+
+    .i_hours    (clk_hours),
+    .i_minutes  (clk_minutes),
+    .i_seconds  (clk_seconds),
+
+    .o_hours    (clk_hours_12h),
+    .o_minutes  (clk_minutes_12h),
+    .o_seconds  (clk_seconds_12h),
+    .o_am_pm    (clk_am_pm)
+  );
+  
 
   // Take the time and display it on the 7-segment displays
   wire display_stb;
@@ -134,7 +158,8 @@ module clock_wrapper (
   // blink the colon at 0.5Hz if the clock is running
   decimal_point_controller dp_control_inst (
     .i_set_time (clk_set),
-    .i_seconds  (clk_seconds),
+    .i_seconds  (clk_seconds_12h),
+    .i_am_pm    (clk_am_pm),
     .o_dp       (clk_dp) 
   );
 
@@ -167,9 +192,9 @@ module clock_wrapper (
     .i_write_config (write_config),
 
     // input signals from the clock
-    .i_hours   (clk_hours),
-    .i_minutes (clk_minutes),
-    .i_seconds (clk_seconds),
+    .i_hours   (clk_hours_12h),
+    .i_minutes (clk_minutes_12h),
+    .i_seconds (clk_seconds_12h),
     .i_dp      (clk_dp),
 
     // SPI output

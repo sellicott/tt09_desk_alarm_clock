@@ -16,11 +16,13 @@
 module decimal_point_controller (
   i_set_time,
   i_seconds,
+  i_am_pm,
   o_dp
 );
   
   input  wire       i_set_time;
   input  wire [5:0] i_seconds;
+  input  wire       i_am_pm;
   output reg  [5:0] o_dp;
 
   always @(*) begin
@@ -34,7 +36,7 @@ module decimal_point_controller (
     end
     o_dp[5] = 1'b0;
     o_dp[2] = 1'b0;
-    o_dp[0] = 1'b0;
+    o_dp[0] = i_am_pm;
   end
 
 endmodule

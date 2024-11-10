@@ -23,6 +23,10 @@
   end
 
 module clock_wrapper_tb ();
+  localparam CLK_PERIOD    = 100;
+  localparam REFCLK_PERIOD = 200;
+  localparam TIMEOUT_SHORT = 9000;
+  localparam TIMEOUT_LONG  = 33000;
 
   // setup file dumping things
   localparam STARTUP_DELAY = 5;
@@ -41,7 +45,6 @@ module clock_wrapper_tb ();
   end
 
   // setup global signals
-  localparam CLK_PERIOD = 50;
   localparam CLK_HALF_PERIOD = CLK_PERIOD/2;
 
   reg clk   = 0;
@@ -51,6 +54,7 @@ module clock_wrapper_tb ();
   reg i_fast_set    = 0;
   reg i_set_hours   = 0;
   reg i_set_minutes = 0;
+  reg i_12h_mode    = 0;
 
 
   always #(CLK_HALF_PERIOD) begin
@@ -67,7 +71,6 @@ module clock_wrapper_tb ();
   end
 
   // model specific signals
-  localparam REFCLK_PERIOD = 113;
   localparam REFCLK_HALF_PERIOD = REFCLK_PERIOD/2;
   reg refclk = 0;
 
@@ -118,6 +121,7 @@ module clock_wrapper_tb ();
     .i_fast_set    (i_fast_set),
     .i_set_hours   (i_set_hours),
     .i_set_minutes (i_set_minutes),
+    .i_12h_mode    (i_12h_mode),
 
     .o_serial_dout (serial_dout),
     .o_serial_load (serial_load),
@@ -173,20 +177,40 @@ module clock_wrapper_tb ();
   wire [5:0] clktime_minutes = bcd2 * 10 + bcd3;
   wire [5:0] clktime_seconds = bcd4 * 10 + bcd5;
 
-  task clock_set_hours (
-    input [4:0] hours_settime
-  );
-    begin
+  task clock_set_hours(input [4:0] hours_settime);
+    begin : set_hours
+      integer update_count;
+      integer timeout;
+
+      if (i_fast_set)
+        timeout = TIMEOUT_SHORT;
+      else
+        timeout = TIMEOUT_LONG;
+
+      $display("Max Timeout: %d", timeout);
+
       i_set_hours = 1'h1;
       reset_timeout_counter();
-      while (clktime_hours < hours_settime && timeout_counter <= TIMEOUT) begin
+
+      update_count = 0;
+      while (clktime_hours < hours_settime
+          && timeout_counter < timeout 
+          && update_count < 30) begin
+
         @(posedge clk_set_stb);
-        `assert_cond(timeout_counter, <, TIMEOUT);
-        $display("Current Set Time: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+        $display("Current Set Time: %02d:%02d.%02d",
+                 clktime_hours,
+                 clktime_minutes,
+                 clktime_seconds);
+
         reset_timeout_counter();
-        repeat(5) @(posedge serial_load);
+        //repeat (6) @(posedge serial_load);
+        repeat (150) @(posedge clk);  // this is because the gl simulation does weird things
+        update_count = update_count + 1;
       end
 
+      `assert_cond(update_count , <, 30);
+      `assert_cond(timeout_counter, <, timeout);
       `assert(clktime_hours, hours_settime);
       @(posedge clk);
       run_timeout_counter = 1'h0;
@@ -194,20 +218,38 @@ module clock_wrapper_tb ();
     end
   endtask
 
-  task clock_set_minutes (
-    input [5:0] minutes_settime
-  );
-    begin
+  task clock_set_minutes(input [5:0] minutes_settime);
+    begin : set_minutes
+      integer update_count;
+      integer timeout;
+      if (i_fast_set)
+        timeout = TIMEOUT_SHORT;
+      else
+        timeout = TIMEOUT_LONG;
+
       i_set_minutes = 1'h1;
       reset_timeout_counter();
-      while (clktime_minutes != minutes_settime && timeout_counter <= TIMEOUT) begin
+
+      update_count = 0;
+      while (clktime_minutes != minutes_settime
+          && timeout_counter <= timeout 
+          && update_count < 70) begin
+
         @(posedge clk_set_stb);
-        `assert_cond(timeout_counter, <, TIMEOUT);
-        $display("Current Set Time: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+        `assert_cond(timeout_counter, <, timeout);
+        $display("Current Set Time: %02d:%02d.%02d",
+                 clktime_hours,
+                 clktime_minutes,
+                 clktime_seconds);
+
         reset_timeout_counter();
-        repeat(5) @(posedge serial_load);
+        //repeat (6) @(posedge serial_load);
+        repeat (150) @(posedge clk);  // this is because the gl simulation does weird things
+        update_count = update_count + 1;
       end
 
+      `assert_cond(update_count , <, 70);
+      `assert_cond(timeout_counter, <, timeout);
       `assert(clktime_minutes, minutes_settime);
       @(posedge clk);
       run_timeout_counter = 1'h0;
@@ -218,8 +260,8 @@ module clock_wrapper_tb ();
   task clock_reset_seconds ();
     begin
       i_set_hours   = 1'h1;
-      i_set_minutes = 1'h1;;
-      repeat(2) @(negedge clk_set_stb);
+      i_set_minutes = 1'h1;
+      repeat(3) @(negedge clk_set_stb);
       `assert(clktime_seconds, 6'h0);
       @(posedge clk);
       i_set_hours   = 1'h0;
@@ -238,14 +280,15 @@ module clock_wrapper_tb ();
   endtask
 
   task run_test();
-    begin
+    begin: my_run_test
+      integer update_count;
       // wait until the outputs are initilized
       reset_timeout_counter();
       repeat(5) @(posedge serial_load);
       i_fast_set = 1'h1;
       // set the hours and minutes
       $display("Set Hours");
-      clock_set_hours(10);
+      clock_set_hours(11);
       $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
 
       $display("Set Minutes");
@@ -256,14 +299,47 @@ module clock_wrapper_tb ();
       clock_reset_seconds();
       $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
 
+      // check that 12h mode is working
+      $display("Check 12h Mode");
+      i_12h_mode = 1'h1;
+      i_fast_set = 1'h1;
+      @(posedge clk_set_stb);
+      clock_reset_seconds();
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+      // we should be at 11:00:00
+      `assert(clktime_hours, 5'd11); 
+      `assert(clktime_minutes, 6'd59); 
+      `assert(clktime_seconds, 6'd0); 
+      @(posedge clk_set_stb);
+      i_12h_mode = 1'h0;
+      clock_reset_seconds();
+
       $display("Run Clock");
       repeat(61) @(posedge clk_1hz_stb);
       $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
 
-      i_fast_set = 1'h0;
+      // we should be at 12:00:00
+      `assert(clktime_hours, 5'd12); 
+      `assert(clktime_minutes, 6'd0); 
+      `assert(clktime_seconds, 6'd0); 
+
+      // check that 12h mode is working
+      $display("Check 12h Mode");
+      i_12h_mode = 1'h1;
+      i_fast_set = 1'h1;
       @(posedge clk_set_stb);
+      clock_reset_seconds();
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+      // we should be at 11:00:00
+      `assert(clktime_hours, 5'd12); 
+      `assert(clktime_minutes, 6'd0); 
+      `assert(clktime_seconds, 6'd0); 
+      @(posedge clk_set_stb);
+      i_12h_mode = 1'h0;
+      clock_reset_seconds();
 
       // try rolling over the hours
+      $display("Check 23->0 Rollover");
       $display("Set Hours");
       clock_set_hours(23);
       $display("Set Minutes");
@@ -272,9 +348,103 @@ module clock_wrapper_tb ();
       clock_reset_seconds();
       $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
 
+      // check that 12h mode is working
+      $display("Check 12h Mode");
+      i_12h_mode = 1'h1;
+      i_fast_set = 1'h1;
+      @(posedge clk_set_stb);
+      clock_reset_seconds();
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+      // we should be at 11:00:00
+      `assert(clktime_hours, 5'd11); 
+      `assert(clktime_minutes, 6'd59); 
+      `assert(clktime_seconds, 6'd0); 
+      @(posedge clk_set_stb);
+      i_12h_mode = 1'h0;
+      clock_reset_seconds();
+
       $display("Run Clock");
       repeat(61) @(posedge clk_1hz_stb);
       $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+
+      // we should be at 00:00:00
+      `assert(clktime_hours, 5'd0); 
+      `assert(clktime_minutes, 6'd0); 
+      `assert(clktime_seconds, 6'd0); 
+
+      // check that 12h mode is working
+      $display("Check 12h Mode");
+      i_12h_mode = 1'h1;
+      i_fast_set = 1'h1;
+      @(posedge clk_set_stb);
+      clock_reset_seconds();
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+      // we should be at 12:00:00
+      `assert(clktime_hours, 5'd12); 
+      `assert(clktime_minutes, 6'd00); 
+      `assert(clktime_seconds, 6'd0); 
+      @(posedge clk_set_stb);
+      i_12h_mode = 1'h0;
+      clock_reset_seconds();
+
+      // check the 12 to 1 rollover
+      $display("Check 12->1 Rollover");
+      $display("Set Minutes");
+      clock_set_minutes(59);
+      $display("Reset Seconds");
+      clock_reset_seconds();
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+
+      // check that 12h mode is working
+      $display("Check 12h Mode");
+      i_12h_mode = 1'h1;
+      i_fast_set = 1'h1;
+      @(posedge clk_set_stb);
+      clock_reset_seconds();
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+      // we should be at 12:00:00
+      `assert(clktime_hours, 5'd12); 
+      `assert(clktime_minutes, 6'd59); 
+      `assert(clktime_seconds, 6'd0); 
+      @(posedge clk_set_stb);
+      i_12h_mode = 1'h0;
+      clock_reset_seconds();
+
+      $display("Run Clock");
+      repeat(61) @(posedge clk_1hz_stb);
+      $display("Time Set: %02d:%02d.%02d", clktime_hours, clktime_minutes, clktime_seconds);
+
+      // we should be at 01:00:00
+      `assert(clktime_hours, 5'd1); 
+      `assert(clktime_minutes, 6'd0); 
+      `assert(clktime_seconds, 6'd0); 
+
+      // Try running through all the hours in 12h mode
+      $display("Run hours set in 12h mode");
+      i_set_hours = 1'h1;
+      i_12h_mode  = 1'h1;
+      reset_timeout_counter();
+
+      update_count = 0;
+      while (timeout_counter < TIMEOUT_SHORT
+          && update_count < 24) begin
+
+        @(posedge clk_set_stb);
+        $display("Current Set Time: %02d:%02d.%02d",
+                 clktime_hours,
+                 clktime_minutes,
+                 clktime_seconds);
+
+        reset_timeout_counter();
+        //repeat (6) @(posedge serial_load);
+        repeat (150) @(posedge clk);  // this is because the gl simulation does weird things
+        update_count = update_count + 1;
+      end
+
+      `assert_cond(timeout_counter, <, TIMEOUT_SHORT);
+      @(posedge clk);
+      run_timeout_counter = 1'h0;
+      i_set_hours = 1'h0;
     end
   endtask
 

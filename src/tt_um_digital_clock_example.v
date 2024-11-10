@@ -16,10 +16,11 @@ module tt_um_digital_clock_example (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-  wire i_refclk      = ui_in[0];
-  wire i_fast_set    = ui_in[2];
-  wire i_set_hours   = ui_in[3];
+  wire i_refclk = ui_in[0];
+  wire i_fast_set = ui_in[2];
+  wire i_set_hours = ui_in[3];
   wire i_set_minutes = ui_in[4];
+  wire i_12h_mode = ui_in[5];
 
   wire o_serial_dout;
   wire o_serial_load;
@@ -36,18 +37,19 @@ module tt_um_digital_clock_example (
   assign uio_oe[7:0]  = 8'h0B;
 
   clock_wrapper desk_clock (
-      .i_reset_n (rst_n),
-      .i_clk     (clk),
-      .i_refclk  (i_refclk),
-      .i_en      (ena),
+      .i_reset_n(rst_n),
+      .i_clk    (clk),
+      .i_refclk (i_refclk),
+      .i_en     (ena),
 
-      .i_fast_set    (i_fast_set),
-      .i_set_hours   (i_set_hours),
-      .i_set_minutes (i_set_minutes),
+      .i_fast_set   (i_fast_set),
+      .i_set_hours  (i_set_hours),
+      .i_set_minutes(i_set_minutes),
+      .i_12h_mode   (i_12h_mode),
 
-      .o_serial_dout (o_serial_dout),
-      .o_serial_load (o_serial_load),
-      .o_serial_clk  (o_serial_clk)
+      .o_serial_dout(o_serial_dout),
+      .o_serial_load(o_serial_load),
+      .o_serial_clk (o_serial_clk)
   );
 
 endmodule

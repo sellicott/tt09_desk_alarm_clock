@@ -25,11 +25,13 @@ module button_debounce (
   i_fast_set,
   i_set_hours,
   i_set_minutes,
+  i_12h_mode,
   
   // debounced outputs
   o_fast_set_db,
   o_set_hours_db,
-  o_set_minutes_db
+  o_set_minutes_db,
+  o_12h_mode_db
 );
 // combine 5 samples from the input button
 parameter NUM_SAMPLES = 5;
@@ -42,10 +44,12 @@ input wire i_debounce_stb;
 input wire i_fast_set;
 input wire i_set_hours;
 input wire i_set_minutes;
+input wire i_12h_mode;
 
 output wire o_fast_set_db;
 output wire o_set_hours_db;
 output wire o_set_minutes_db;
+output wire o_12h_mode_db;
 
 localparam RESET_VAL = {NUM_SAMPLES+1{1'b0}};
 // make pipeline registers for all the button inputs, the first input is used
@@ -53,6 +57,7 @@ localparam RESET_VAL = {NUM_SAMPLES+1{1'b0}};
 reg [NUM_SAMPLES:0] fast_set_reg;
 reg [NUM_SAMPLES:0] set_hours_reg;
 reg [NUM_SAMPLES:0] set_minutes_reg;
+reg [NUM_SAMPLES:0] en_12h_mode_reg;
 
 // pipeline and sample the input signals
 always @(posedge i_clk) begin
@@ -60,11 +65,13 @@ always @(posedge i_clk) begin
     fast_set_reg    <= {i_fast_set,    fast_set_reg[NUM_SAMPLES:1]};
     set_hours_reg   <= {i_set_hours,   set_hours_reg[NUM_SAMPLES:1]};
     set_minutes_reg <= {i_set_minutes, set_minutes_reg[NUM_SAMPLES:1]};
+    en_12h_mode_reg <= {i_12h_mode,    en_12h_mode_reg[NUM_SAMPLES:1]};
   end
   if (!i_reset_n) begin
     fast_set_reg    <= RESET_VAL;
     set_hours_reg   <= RESET_VAL;
     set_minutes_reg <= RESET_VAL;
+    en_12h_mode_reg <= RESET_VAL;
   end
 end
 
@@ -72,5 +79,6 @@ end
 assign o_fast_set_db    = &fast_set_reg[NUM_SAMPLES-1:0];
 assign o_set_hours_db   = &set_hours_reg[NUM_SAMPLES-1:0];
 assign o_set_minutes_db = &set_minutes_reg[NUM_SAMPLES-1:0];
+assign o_12h_mode_db    = &en_12h_mode_reg[NUM_SAMPLES-1:0];
 
 endmodule
