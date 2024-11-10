@@ -23,6 +23,7 @@ project:
     - "input/clk_gen.v"
     - "input/button_debounce.v"
     - "core/clock_register.v"
+    - "core/clock_mode_converter.v"
     - "core/decimal_point_controller.v"
     - "core/display_controller.v"
     - "core/output_wrapper.v"
